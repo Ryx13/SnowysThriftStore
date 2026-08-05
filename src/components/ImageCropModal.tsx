@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
-import { X, ZoomIn, Check } from 'lucide-react';
+import { X, ZoomIn, Check, ImageOff } from 'lucide-react';
 
 const PREVIEW_SIZE = 320;
 const OUTPUT_SIZE = 900;
@@ -9,9 +9,10 @@ interface Props {
   file: File;
   onCancel: () => void;
   onCropped: (blob: Blob) => void;
+  onUseOriginal: () => void;
 }
 
-export default function ImageCropModal({ file, onCancel, onCropped }: Props) {
+export default function ImageCropModal({ file, onCancel, onCropped, onUseOriginal }: Props) {
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -72,7 +73,7 @@ export default function ImageCropModal({ file, onCancel, onCropped }: Props) {
     });
   }
 
-  function handleConfirm() {
+  function handleConfirmCrop() {
     if (!naturalSize || !imgRef.current) return;
     const canvas = document.createElement('canvas');
     canvas.width = OUTPUT_SIZE;
@@ -88,6 +89,8 @@ export default function ImageCropModal({ file, onCancel, onCropped }: Props) {
 
     canvas.toBlob((blob) => { if (blob) onCropped(blob); }, 'image/jpeg', 0.9);
   }
+
+  const isPortraitOrLandscape = naturalSize && naturalSize.w !== naturalSize.h;
 
   return (
     <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4">
@@ -142,21 +145,34 @@ export default function ImageCropModal({ file, onCancel, onCropped }: Props) {
           </div>
           <p className="text-[11px] text-gray-400 text-center mt-2">Drag to reposition · Slide to zoom</p>
 
-          <div className="flex gap-2 mt-4">
+          {isPortraitOrLandscape && (
+            <div className="mt-3 p-2.5 bg-blue-50 border border-blue-100 rounded-lg text-[11px] text-blue-700 flex items-start gap-1.5">
+              <ImageOff className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              This photo isn't square. You can crop it to fit, or keep its original shape (e.g. a tall coat or dress) using the option below.
+            </div>
+          )}
+
+          <div className="flex gap-2 mt-3">
             <button
               onClick={onCancel}
-              className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-gray-100 text-gray-700 hover:bg-gray-200"
+              className="flex-1 py-2.5 rounded-lg font-medium text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
             >
               Skip Photo
             </button>
             <button
-              onClick={handleConfirm}
-              disabled={!naturalSize}
-              className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-black text-white hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              onClick={onUseOriginal}
+              className="flex-1 py-2.5 rounded-lg font-medium text-xs bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
             >
-              <Check className="w-4 h-4" /> Use This Crop
+              Use Original (No Crop)
             </button>
           </div>
+          <button
+            onClick={handleConfirmCrop}
+            disabled={!naturalSize}
+            className="w-full mt-2 py-2.5 rounded-lg font-medium text-sm bg-black text-white hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-1.5"
+          >
+            <Check className="w-4 h-4" /> Use This Crop
+          </button>
         </div>
       </div>
     </div>

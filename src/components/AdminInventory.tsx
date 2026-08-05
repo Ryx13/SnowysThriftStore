@@ -82,9 +82,9 @@ export default function AdminInventory() {
                 key={product.id}
                 className="bg-white border border-gray-200 rounded-xl p-3 flex items-center gap-4 hover:shadow-sm transition-shadow"
               >
-                <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
                   {cover ? (
-                    <img src={cover} alt={product.title} className="w-full h-full object-cover" />
+                    <img src={cover} alt={product.title} className="max-w-full max-h-full object-contain" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400">No photo</div>
                   )}

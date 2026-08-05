@@ -1,9 +1,18 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useCart } from '../lib/CartContext';
-import { useCategories } from '../lib/useCategories';
-import { ShieldCheck, ShoppingCart, Check, Search, X } from 'lucide-react';
+import {
+  ChevronRight,
+  ShoppingCart,
+  Check,
+  ArrowLeft,
+  Shirt,
+  Sparkles,
+  Truck,
+  RotateCcw,
+  Ruler,
+} from 'lucide-react';
 
 interface ProductImage {
   image_url: string;
@@ -14,13 +23,22 @@ interface ProductImage {
 interface Product {
   id: string;
   title: string;
+  description: string;
   price: number;
   condition: string;
   standard_size: string;
   sa_size: string;
-  status: string;
-  description: string;
+  fabric_composition: string | null;
+  care_instructions: string | null;
   subcategory_id: string | null;
+  product_images: ProductImage[];
+  subcategories: { id: string; name: string; categories: { id: string; name: string } | null } | null;
+}
+
+interface RelatedProduct {
+  id: string;
+  title: string;
+  price: number;
   product_images: ProductImage[];
 }
 
@@ -30,254 +48,268 @@ function getCoverImage(images: ProductImage[]): string | null {
   return primary ? primary.image_url : images[0].image_url;
 }
 
-const TICKER_TEXT = 'ONE-OF-ONE PIECES  •  HAND-CHECKED CONDITION  •  THRIFTED WITH LOVE  •  PAXI DELIVERY NATIONWIDE  •  NEW DROPS WEEKLY  •  ';
-
-export default function StorefrontPage() {
+export default function ProductPage() {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addItem, isInCart } = useCart();
-  const { categories, subcategories } = useCategories();
-  const [products, setProducts] = useState<Product[]>([]);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [related, setRelated] = useState<RelatedProduct[]>([]);
+  const [activeImage, setActiveImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    fetchProducts();
-  }, []);
+    async function fetchProduct() {
+      setLoading(true);
+      setNotFound(false);
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select(
+            '*, product_images(image_url, is_primary, display_order), subcategories(id, name, categories(id, name))'
+          )
+          .eq('id', id)
+          .single();
 
-  async function fetchProducts() {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*, product_images(image_url, is_primary, display_order)')
-        .eq('status', 'available')
-        .order('created_at', { ascending: false });
+        if (error || !data) {
+          setNotFound(true);
+          return;
+        }
 
-      if (error) throw error;
-      if (data) setProducts(data as Product[]);
-    } catch (err) {
-      console.error('Error fetching products:', err);
-    } finally {
-      setLoading(false);
+        setProduct(data as unknown as Product);
+        const sorted = [...(data.product_images as ProductImage[])].sort((a, b) => a.display_order - b.display_order);
+        setActiveImage(sorted[0]?.image_url || null);
+
+        if (data.subcategory_id) {
+          const { data: relatedData } = await supabase
+            .from('products')
+            .select('id, title, price, product_images(image_url, is_primary, display_order)')
+            .eq('subcategory_id', data.subcategory_id)
+            .eq('status', 'available')
+            .neq('id', data.id)
+            .limit(4);
+
+          setRelated((relatedData as RelatedProduct[]) || []);
+        } else {
+          setRelated([]);
+        }
+      } catch (err) {
+        console.error('Error fetching product:', err);
+        setNotFound(true);
+      } finally {
+        setLoading(false);
+      }
     }
+
+    if (id) fetchProduct();
+    window.scrollTo(0, 0);
+  }, [id]);
+
+  if (loading) {
+    return <div className="max-w-6xl mx-auto px-6 py-16 text-center text-gray-500">Loading item...</div>;
   }
 
-  function handleAddToCart(e: React.MouseEvent, product: Product) {
-    e.stopPropagation();
+  if (notFound || !product) {
+    return (
+      <div className="max-w-6xl mx-auto px-6 py-16 text-center">
+        <p className="text-gray-700 font-medium mb-4">This item couldn't be found — it may have already sold.</p>
+        <button onClick={() => navigate('/')} className="px-4 py-2 bg-black text-white text-xs font-semibold rounded-lg">
+          Back to Storefront
+        </button>
+      </div>
+    );
+  }
+
+  const sortedImages = [...product.product_images].sort((a, b) => a.display_order - b.display_order);
+  const inCart = isInCart(product.id);
+  const categoryName = product.subcategories?.categories?.name;
+  const subcategoryName = product.subcategories?.name;
+
+  function handleAddToCart() {
     addItem({
-      productId: product.id,
-      title: product.title,
-      price: product.price,
-      standardSize: product.standard_size,
-      saSize: product.sa_size,
-      condition: product.condition,
-      coverImage: getCoverImage(product.product_images),
+      productId: product!.id,
+      title: product!.title,
+      price: product!.price,
+      standardSize: product!.standard_size,
+      saSize: product!.sa_size,
+      condition: product!.condition,
+      coverImage: activeImage,
     });
   }
 
-  const visibleSubcategories = selectedCategoryId
-    ? subcategories.filter((s) => s.category_id === selectedCategoryId)
-    : [];
-
-  const query = searchQuery.trim().toLowerCase();
-
-  const filteredProducts = products.filter((p) => {
-    if (query && !p.title.toLowerCase().includes(query) && !(p.description || '').toLowerCase().includes(query)) {
-      return false;
-    }
-    if (selectedSubcategoryId) return p.subcategory_id === selectedSubcategoryId;
-    if (selectedCategoryId) return visibleSubcategories.some((s) => s.id === p.subcategory_id);
-    return true;
-  });
-
   return (
-    <>
-      {/* Hero Banner */}
-      <section className="bg-black text-white pt-14 sm:pt-16 pb-10 px-4 sm:px-6 text-center">
-        <p className="text-[11px] sm:text-xs uppercase tracking-[0.2em] text-gray-400 font-semibold mb-3">
-          100% Secondhand · 100% South African
-        </p>
-        <h2 className="text-3xl sm:text-5xl font-black tracking-tight mb-4 leading-tight">
-          Someone's Closet.
-          <br />
-          Your Next Favorite Fit.
-        </h2>
-        <p className="text-gray-300 text-sm sm:text-base max-w-lg mx-auto">
-          Every piece here is pre-loved, hand-checked, and one of one — once it's gone, it's gone for good.
-          Snag it, chat with us, we'll get it to your nearest PAXI point.
-        </p>
-      </section>
-
-      {/* Marquee ticker */}
-      <div className="bg-white border-y border-gray-200 py-2 overflow-hidden">
-        <div className="flex whitespace-nowrap animate-marquee">
-          <span className="text-xs font-bold uppercase tracking-wider text-gray-800 px-2">
-            {TICKER_TEXT.repeat(2)}
-          </span>
-          <span className="text-xs font-bold uppercase tracking-wider text-gray-800 px-2" aria-hidden="true">
-            {TICKER_TEXT.repeat(2)}
-          </span>
-        </div>
+    <main className="max-w-6xl mx-auto px-6 py-8">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-6 flex-wrap">
+        <Link to="/" className="hover:underline flex items-center gap-1">
+          <ArrowLeft className="w-3 h-3" /> Storefront
+        </Link>
+        {categoryName && (
+          <>
+            <ChevronRight className="w-3 h-3" />
+            <span>{categoryName}</span>
+          </>
+        )}
+        {subcategoryName && (
+          <>
+            <ChevronRight className="w-3 h-3" />
+            <span>{subcategoryName}</span>
+          </>
+        )}
+        <ChevronRight className="w-3 h-3" />
+        <span className="text-gray-900 font-medium truncate">{product.title}</span>
       </div>
 
-      {/* Search */}
-      <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3">
-        <div className="max-w-6xl mx-auto relative">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search for hoodies, jeans, sneakers..."
-            className="w-full pl-9 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-black transition-all"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Category Filter Bar */}
-      <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sticky top-[57px] sm:top-[73px] z-30">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            <button
-              onClick={() => {
-                setSelectedCategoryId(null);
-                setSelectedSubcategoryId(null);
-              }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                !selectedCategoryId ? 'bg-black text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              All
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  setSelectedCategoryId(cat.id);
-                  setSelectedSubcategoryId(null);
-                }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                  selectedCategoryId === cat.id ? 'bg-black text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        {/* Gallery */}
+        <div>
+          <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center">
+            {activeImage ? (
+              <img src={activeImage} alt={product.title} className="max-w-full max-h-full object-contain" />
+            ) : (
+              <span className="text-sm text-gray-400">No photo yet</span>
+            )}
           </div>
-
-          {visibleSubcategories.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto mt-2 pt-2 border-t border-gray-100">
-              <button
-                onClick={() => setSelectedSubcategoryId(null)}
-                className={`px-3 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
-                  !selectedSubcategoryId ? 'bg-gray-800 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                All {categories.find((c) => c.id === selectedCategoryId)?.name}
-              </button>
-              {visibleSubcategories.map((sub) => (
+          {sortedImages.length > 1 && (
+            <div className="flex gap-2 mt-3 overflow-x-auto">
+              {sortedImages.map((img, i) => (
                 <button
-                  key={sub.id}
-                  onClick={() => setSelectedSubcategoryId(sub.id)}
-                  className={`px-3 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
-                    selectedSubcategoryId === sub.id ? 'bg-gray-800 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                  key={i}
+                  onClick={() => setActiveImage(img.image_url)}
+                  className={`w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border-2 flex items-center justify-center ${
+                    activeImage === img.image_url ? 'border-black' : 'border-transparent'
                   }`}
                 >
-                  {sub.name}
+                  <img src={img.image_url} alt="" className="max-w-full max-h-full object-contain" />
                 </button>
               ))}
             </div>
           )}
         </div>
-      </div>
 
-      {/* Catalog Grid */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
-        <h3 className="text-lg font-bold mb-6 border-b pb-2">
-          {query ? `Results for "${searchQuery}"` : 'Available Drops'}
-        </h3>
+        {/* Info */}
+        <div>
+          <span className="inline-block text-xs bg-gray-100 px-2 py-0.5 rounded font-semibold text-gray-700 mb-3">
+            {product.condition}
+          </span>
+          <h1 className="text-2xl font-black tracking-tight mb-2">{product.title}</h1>
+          <p className="font-black text-3xl mb-4">R{product.price.toFixed(2)}</p>
 
-        {loading ? (
-          <p className="text-gray-500 text-center py-12">Loading inventory from Supabase...</p>
-        ) : filteredProducts.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300 p-8">
-            <ShieldCheck className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-700 font-medium">
-              {query ? 'No items match your search.' : 'No items match this filter yet.'}
+          <div className="border-t border-gray-200 pt-4 mb-4">
+            <p className="text-sm text-gray-700">
+              <span className="font-semibold">Size:</span> {product.standard_size}
+              {product.sa_size !== 'N/A' && <span className="text-gray-500"> (SA {product.sa_size})</span>}
             </p>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
-            {filteredProducts.map((product) => {
-              const coverImage = getCoverImage(product.product_images);
-              const inCart = isInCart(product.id);
+
+          {product.description && (
+            <div className="mb-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Description</h3>
+              <p className="text-sm text-gray-700 whitespace-pre-line">{product.description}</p>
+            </div>
+          )}
+
+          {(product.fabric_composition || product.care_instructions) && (
+            <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1.5">
+                <Shirt className="w-3.5 h-3.5" /> Material & Care
+              </h3>
+              {product.fabric_composition && (
+                <p className="text-sm text-gray-700">
+                  <span className="font-semibold">Fabric:</span> {product.fabric_composition}
+                </p>
+              )}
+              {product.care_instructions && (
+                <p className="text-sm text-gray-700 flex items-start gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gray-400" />
+                  {product.care_instructions}
+                </p>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={handleAddToCart}
+            disabled={inCart}
+            className={`w-full py-3 rounded-lg font-semibold text-sm transition-colors flex items-center justify-center gap-2 ${
+              inCart ? 'bg-green-100 text-green-700' : 'bg-black text-white hover:bg-gray-800'
+            }`}
+          >
+            {inCart ? (
+              <>
+                <Check className="w-4 h-4" /> In Cart
+              </>
+            ) : (
+              <>
+                <ShoppingCart className="w-4 h-4" /> Add to Cart
+              </>
+            )}
+          </button>
+          <p className="text-[11px] text-gray-400 mt-2 text-center">
+            Delivery fee excluded — confirmed with the seller via WhatsApp/chat at checkout.
+          </p>
+        </div>
+      </div>
+
+      {/* Delivery, Returns & Sizing */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-12 pt-8 border-t border-gray-200">
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-1.5">
+            <Truck className="w-4 h-4 text-gray-700" />
+            <h4 className="text-sm font-bold">Shipping</h4>
+          </div>
+          <p className="text-xs text-gray-600">
+            Delivered via PEP PAXI. Orders are dispatched within 48 hours of full payment (items + delivery fee) clearing.
+          </p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-1.5">
+            <RotateCcw className="w-4 h-4 text-gray-700" />
+            <h4 className="text-sm font-bold">Returns</h4>
+          </div>
+          <p className="text-xs text-gray-600">
+            All sales are final. Returns are only accepted if the item received is significantly different from its
+            description or photos.
+          </p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-1.5">
+            <Ruler className="w-4 h-4 text-gray-700" />
+            <h4 className="text-sm font-bold">Sizing</h4>
+          </div>
+          <p className="text-xs text-gray-600">
+            Standard sizes are paired with SA numeric sizing where relevant. Message us on chat if you need exact
+            measurements before buying.
+          </p>
+        </div>
+      </div>
+
+      {/* You Might Also Like */}
+      {related.length > 0 && (
+        <div className="mt-12 pt-8 border-t border-gray-200">
+          <h3 className="text-lg font-bold mb-4">You Might Also Like</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {related.map((item) => {
+              const cover = getCoverImage(item.product_images);
               return (
                 <div
-                  key={product.id}
-                  onClick={() => navigate(`/product/${product.id}`)}
-                  className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-lg transition-shadow cursor-pointer group relative"
+                  key={item.id}
+                  onClick={() => navigate(`/product/${item.id}`)}
+                  className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-xs hover:shadow-md transition-shadow cursor-pointer"
                 >
-                  <div className="aspect-square bg-gray-100 flex items-center justify-center text-gray-400 text-xs overflow-hidden relative">
-                    <span className="absolute top-2 left-2 z-10 bg-black text-white text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded">
-                      1 of 1
-                    </span>
-                    {coverImage ? (
-                      <img
-                        src={coverImage}
-                        alt={product.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      '[No Photo Yet]'
-                    )}
+                  <div className="h-32 bg-gray-100 flex items-center justify-center text-gray-400 text-[10px] overflow-hidden">
+                    {cover ? <img src={cover} alt={item.title} className="max-w-full max-h-full object-contain" /> : 'No Photo'}
                   </div>
-                  <div className="p-3 sm:p-4">
-                    <div className="flex justify-between items-start mb-1 gap-2">
-                      <h4 className="font-bold text-xs sm:text-sm truncate">{product.title}</h4>
-                      <span className="text-[10px] sm:text-xs bg-gray-100 px-1.5 sm:px-2 py-0.5 rounded font-semibold text-gray-700 whitespace-nowrap">
-                        {product.condition}
-                      </span>
-                    </div>
-                    <p className="text-[11px] sm:text-xs text-gray-500 mb-2">
-                      Size: {product.standard_size} {product.sa_size !== 'N/A' ? `(SA ${product.sa_size})` : ''}
-                    </p>
-                    <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                      <span className="font-black text-sm sm:text-base">R{product.price.toFixed(2)}</span>
-                      <button
-                        onClick={(e) => handleAddToCart(e, product)}
-                        disabled={inCart}
-                        className={`text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 ${
-                          inCart ? 'bg-green-100 text-green-700' : 'bg-black text-white hover:bg-gray-800'
-                        }`}
-                      >
-                        {inCart ? (
-                          <>
-                            <Check className="w-3 h-3" /> <span className="hidden sm:inline">In Cart</span>
-                          </>
-                        ) : (
-                          <>
-                            <ShoppingCart className="w-3 h-3" /> <span className="hidden sm:inline">Add</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                  <div className="p-2.5">
+                    <p className="text-xs font-semibold truncate">{item.title}</p>
+                    <p className="text-sm font-bold mt-0.5">R{item.price.toFixed(2)}</p>
                   </div>
                 </div>
               );
             })}
           </div>
-        )}
-      </main>
-    </>
+        </div>
+      )}
+    </main>
   );
 }

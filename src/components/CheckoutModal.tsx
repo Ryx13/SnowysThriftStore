@@ -1,20 +1,25 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import { useCart } from '../lib/CartContext';
 import { generateWhatsAppCheckoutUrl } from '../lib/whatsapp';
-import { X, MessageCircle, AlertTriangle } from 'lucide-react';
+import { X, MessageCircle, AlertTriangle, Smartphone, MessagesSquare } from 'lucide-react';
 
 const SELLER_WHATSAPP_NUMBER = import.meta.env.VITE_SELLER_WHATSAPP_NUMBER as string;
+
+type ContactMethod = 'whatsapp' | 'chat';
 
 export default function CheckoutModal({ onClose }: { onClose: () => void }) {
   const { user, profile } = useAuth();
   const { items, subtotal, clearCart } = useCart();
+  const navigate = useNavigate();
 
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [phone, setPhone] = useState(profile?.phone_number || '');
   const [paxiStore, setPaxiStore] = useState('');
   const [destinationCity, setDestinationCity] = useState('');
+  const [contactMethod, setContactMethod] = useState<ContactMethod>('whatsapp');
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,7 +39,7 @@ export default function CheckoutModal({ onClose }: { onClose: () => void }) {
       setError('Please confirm you understand the delivery and payment terms.');
       return;
     }
-    if (!SELLER_WHATSAPP_NUMBER) {
+    if (contactMethod === 'whatsapp' && !SELLER_WHATSAPP_NUMBER) {
       setError('Store WhatsApp number is not configured yet. Please contact the site owner.');
       return;
     }
@@ -45,6 +50,8 @@ export default function CheckoutModal({ onClose }: { onClose: () => void }) {
         .map((i) => `${i.title} (${i.standardSize}/SA ${i.saSize}) - R${i.price.toFixed(2)}`)
         .join(', ');
 
+      // The order is always saved to the buyer's account and visible to the seller in the
+      // Orders Inbox, regardless of which contact method is chosen below.
       const { data: thread, error: threadError } = await supabase
         .from('chat_threads')
         .insert([
@@ -63,16 +70,14 @@ export default function CheckoutModal({ onClose }: { onClose: () => void }) {
 
       if (threadError) throw threadError;
 
-      const whatsappUrl = generateWhatsAppCheckoutUrl(
-        SELLER_WHATSAPP_NUMBER,
-        items,
-        { fullName, phone, paxiStoreNameOrCode: paxiStore, destinationCity },
-        subtotal
-      );
+      const methodNote =
+        contactMethod === 'whatsapp'
+          ? 'Buyer chose to continue this order on WhatsApp.'
+          : "Buyer chose to keep this order in Snowy's Thrift Store chat (not WhatsApp).";
 
       const messageBody = `New order placed:\n${orderSummaryText}\n\nSubtotal: R${subtotal.toFixed(
         2
-      )}\nDelivery to: ${paxiStore}, ${destinationCity}\nContact: ${phone}\n\nNote: Delivery fee excluded, to be confirmed. Funds must clear before dispatch.`;
+      )}\nDelivery to: ${paxiStore}, ${destinationCity}\nContact: ${phone}\n\n${methodNote}\n\nNote: Delivery fee excluded, to be confirmed. Funds must clear before dispatch.`;
 
       const { error: messageError } = await supabase.from('chat_messages').insert([
         { thread_id: thread.id, sender_id: user.id, message_body: messageBody },
@@ -80,10 +85,23 @@ export default function CheckoutModal({ onClose }: { onClose: () => void }) {
 
       if (messageError) throw messageError;
 
-      window.open(whatsappUrl, '_blank');
+      if (contactMethod === 'whatsapp') {
+        const whatsappUrl = generateWhatsAppCheckoutUrl(
+          SELLER_WHATSAPP_NUMBER,
+          items,
+          { fullName, phone, paxiStoreNameOrCode: paxiStore, destinationCity },
+          subtotal
+        );
+        window.open(whatsappUrl, '_blank');
+      }
 
       clearCart();
       onClose();
+
+      if (contactMethod === 'chat') {
+        // Take them straight to the conversation they just chose to use
+        navigate('/orders');
+      }
     } catch (err: any) {
       setError(err.message || 'Something went wrong placing your order.');
     } finally {
@@ -154,14 +172,49 @@ export default function CheckoutModal({ onClose }: { onClose: () => void }) {
             />
           </div>
 
+          {/* Contact method choice */}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-2">
+              How should we talk about your order?
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setContactMethod('whatsapp')}
+                className={`p-3 rounded-lg border text-left transition-colors ${
+                  contactMethod === 'whatsapp' ? 'border-black bg-gray-50' : 'border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <Smartphone className="w-4 h-4 mb-1" />
+                <p className="text-xs font-semibold">WhatsApp</p>
+                <p className="text-[11px] text-gray-500">Opens a WhatsApp chat with your order pre-filled.</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setContactMethod('chat')}
+                className={`p-3 rounded-lg border text-left transition-colors ${
+                  contactMethod === 'chat' ? 'border-black bg-gray-50' : 'border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <MessagesSquare className="w-4 h-4 mb-1" />
+                <p className="text-xs font-semibold">In-App Chat</p>
+                <p className="text-[11px] text-gray-500">Stay right here — no WhatsApp needed.</p>
+              </button>
+            </div>
+          </div>
+
           <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 space-y-1.5">
             <div className="flex items-center gap-1.5 font-semibold text-gray-900">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Delivery & Payment Disclaimer
             </div>
             <p>1. Delivery via PEP PAXI is calculated separately based on parcel size and location — it is NOT included in the subtotal above.</p>
-            <p>2. The price shown at checkout is not final until the delivery fee is agreed with the seller via WhatsApp/chat.</p>
+            <p>2. The price shown at checkout is not final until the delivery fee is agreed with the seller.</p>
             <p>3. Full payment (items + delivery) must reflect before any item is packaged and shipped.</p>
-            <p>4. Clicking below opens WhatsApp with your order pre-filled, and also saves a copy of this order to your Snowy's Thrift Store account so you can chat with us here too.</p>
+            <p>
+              4. You don't need WhatsApp to buy from us — every order is also saved to a chat under{' '}
+              <span className="font-semibold">My Orders</span> on this site, and you can message us there instead.
+              Pick whichever you prefer above; your order is sent to that one, and always saved to your account either way.
+            </p>
           </div>
 
           <label className="flex items-start gap-2 text-xs">
@@ -177,7 +230,11 @@ export default function CheckoutModal({ onClose }: { onClose: () => void }) {
             className="w-full bg-green-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             <MessageCircle className="w-4 h-4" />
-            {loading ? 'Placing Order...' : `Continue on WhatsApp (R${subtotal.toFixed(2)} + Delivery)`}
+            {loading
+              ? 'Placing Order...'
+              : contactMethod === 'whatsapp'
+              ? `Continue on WhatsApp (R${subtotal.toFixed(2)} + Delivery)`
+              : `Place Order & Open Chat (R${subtotal.toFixed(2)} + Delivery)`}
           </button>
         </div>
       </div>

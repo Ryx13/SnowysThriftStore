@@ -289,17 +289,21 @@ export default function AdminUploader({ onProductAdded }: { onProductAdded: () =
             onChange={handleFileSelect}
             className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-black file:text-white hover:file:bg-gray-800"
           />
-          <p className="text-[11px] text-gray-400 mt-1">Each photo opens a crop step so you can see exactly how it'll look before it's added.</p>
+          <p className="text-[11px] text-gray-400 mt-1">
+            Each photo opens a crop step — square-crop it, or keep its original shape for taller items like coats or dresses.
+          </p>
 
           {imageFiles.length > 0 && (
             <div className="grid grid-cols-3 gap-2 mt-3">
               {imageFiles.map((file, index) => (
                 <div key={index} className="relative group">
-                  <img
-                    src={URL.createObjectURL(file)}
-                    alt={`preview-${index}`}
-                    className="w-full aspect-square object-cover rounded-lg border border-gray-200"
-                  />
+                  <div className="w-full aspect-square bg-gray-100 rounded-lg border border-gray-200 overflow-hidden flex items-center justify-center">
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={`preview-${index}`}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
                   {index === 0 && (
                     <span className="absolute bottom-1 left-1 bg-black text-white text-[10px] px-1.5 py-0.5 rounded">
                       Cover
@@ -324,7 +328,7 @@ export default function AdminUploader({ onProductAdded }: { onProductAdded: () =
           className="w-full bg-black text-white py-2.5 rounded-lg font-medium text-sm hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <Upload className="w-4 h-4" />
-          {loading ? 'Publishing Drop...' : 'Publish to Snowy\'s Thrift Store'}
+          {loading ? 'Publishing Drop...' : "Publish to Snowy's Thrift Store"}
         </button>
       </form>
 
@@ -338,6 +342,11 @@ export default function AdminUploader({ onProductAdded }: { onProductAdded: () =
               type: 'image/jpeg',
             });
             setImageFiles((prev) => [...prev, croppedFile].slice(0, 6));
+            setCropQueue((prev) => prev.slice(1));
+          }}
+          onUseOriginal={() => {
+            const original = cropQueue[0];
+            setImageFiles((prev) => [...prev, original].slice(0, 6));
             setCropQueue((prev) => prev.slice(1));
           }}
         />

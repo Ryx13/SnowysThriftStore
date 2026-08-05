@@ -349,7 +349,9 @@ export default function EditProductModal({
               <div className="grid grid-cols-3 gap-2 mb-2">
                 {images.map((img) => (
                   <div key={img.id} className="relative group">
-                    <img src={img.image_url} alt="" className="w-full aspect-square object-cover rounded-lg border border-gray-200" />
+                    <div className="w-full aspect-square bg-gray-100 rounded-lg border border-gray-200 overflow-hidden flex items-center justify-center">
+                      <img src={img.image_url} alt="" className="max-w-full max-h-full object-contain" />
+                    </div>
                     {img.is_primary && (
                       <span className="absolute bottom-1 left-1 bg-black text-white text-[10px] px-1.5 py-0.5 rounded">
                         Cover
@@ -388,16 +390,13 @@ export default function EditProductModal({
               onChange={handleFileSelect}
               className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-black file:text-white hover:file:bg-gray-800"
             />
-            <p className="text-[11px] text-gray-400 mt-1">Each new photo opens a crop step first.</p>
+            <p className="text-[11px] text-gray-400 mt-1">Each new photo opens a crop step — square-crop it or keep its original shape.</p>
             {newFiles.length > 0 && (
               <div className="grid grid-cols-3 gap-2 mt-2">
                 {newFiles.map((file, index) => (
-                  <img
-                    key={index}
-                    src={URL.createObjectURL(file)}
-                    alt=""
-                    className="w-full aspect-square object-cover rounded-lg border border-dashed border-gray-300"
-                  />
+                  <div key={index} className="w-full aspect-square bg-gray-100 rounded-lg border border-dashed border-gray-300 overflow-hidden flex items-center justify-center">
+                    <img src={URL.createObjectURL(file)} alt="" className="max-w-full max-h-full object-contain" />
+                  </div>
                 ))}
               </div>
             )}
@@ -433,6 +432,11 @@ export default function EditProductModal({
               type: 'image/jpeg',
             });
             setNewFiles((prev) => [...prev, croppedFile]);
+            setCropQueue((prev) => prev.slice(1));
+          }}
+          onUseOriginal={() => {
+            const original = cropQueue[0];
+            setNewFiles((prev) => [...prev, original]);
             setCropQueue((prev) => prev.slice(1));
           }}
         />

@@ -80,7 +80,6 @@ export default function ProductPage() {
         const sorted = [...(data.product_images as ProductImage[])].sort((a, b) => a.display_order - b.display_order);
         setActiveImage(sorted[0]?.image_url || null);
 
-        // Fetch related products from the same subcategory
         if (data.subcategory_id) {
           const { data: relatedData } = await supabase
             .from('products')
@@ -166,7 +165,7 @@ export default function ProductPage() {
         <div>
           <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center">
             {activeImage ? (
-              <img src={activeImage} alt={product.title} className="w-full h-full object-cover" />
+              <img src={activeImage} alt={product.title} className="max-w-full max-h-full object-contain" />
             ) : (
               <span className="text-sm text-gray-400">No photo yet</span>
             )}
@@ -177,11 +176,11 @@ export default function ProductPage() {
                 <button
                   key={i}
                   onClick={() => setActiveImage(img.image_url)}
-                  className={`w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border-2 ${
+                  className={`w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border-2 flex items-center justify-center ${
                     activeImage === img.image_url ? 'border-black' : 'border-transparent'
                   }`}
                 >
-                  <img src={img.image_url} alt="" className="w-full h-full object-cover" />
+                  <img src={img.image_url} alt="" className="max-w-full max-h-full object-contain" />
                 </button>
               ))}
             </div>
@@ -299,7 +298,7 @@ export default function ProductPage() {
                   className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-xs hover:shadow-md transition-shadow cursor-pointer"
                 >
                   <div className="h-32 bg-gray-100 flex items-center justify-center text-gray-400 text-[10px] overflow-hidden">
-                    {cover ? <img src={cover} alt={item.title} className="w-full h-full object-cover" /> : 'No Photo'}
+                    {cover ? <img src={cover} alt={item.title} className="max-w-full max-h-full object-contain" /> : 'No Photo'}
                   </div>
                   <div className="p-2.5">
                     <p className="text-xs font-semibold truncate">{item.title}</p>

@@ -26,9 +26,9 @@ export default function CartDrawer({ onClose }: { onClose: () => void }) {
           ) : (
             items.map((item) => (
               <div key={item.productId} className="flex gap-3 border-b pb-3">
-                <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
                   {item.coverImage && (
-                    <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover" />
+                    <img src={item.coverImage} alt={item.title} className="max-w-full max-h-full object-contain" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
