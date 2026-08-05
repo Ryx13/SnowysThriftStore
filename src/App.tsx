@@ -9,11 +9,13 @@ import {
   ShoppingCart,
   MessageSquare,
   Settings,
+  Tags,
   Menu,
   X,
 } from 'lucide-react';
 import AdminUploader from './components/AdminUploader';
 import AdminInventory from './components/AdminInventory';
+import CategoryManager from './components/CategoryManager';
 import { useAuth } from './lib/AuthContext';
 import AuthForm from './components/AuthForm';
 import { useCart } from './lib/CartContext';
@@ -60,6 +62,13 @@ function InventoryRoute() {
   if (authLoading) return <p className="text-gray-500 text-center py-12">Checking authentication...</p>;
   if (!isAdmin) return <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 text-center text-gray-500">Access restricted.</main>;
   return <AdminInventory />;
+}
+
+function CategoriesRoute() {
+  const { isAdmin, loading: authLoading } = useAuth();
+  if (authLoading) return <p className="text-gray-500 text-center py-12">Checking authentication...</p>;
+  if (!isAdmin) return <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 text-center text-gray-500">Access restricted.</main>;
+  return <CategoryManager />;
 }
 
 function OrdersRoute() {
@@ -150,6 +159,9 @@ export default function App() {
               <button onClick={() => go('/inventory')} className={navButtonClass('/inventory')}>
                 <Settings className="w-3.5 h-3.5" /> Manage Inventory
               </button>
+              <button onClick={() => go('/categories')} className={navButtonClass('/categories')}>
+                <Tags className="w-3.5 h-3.5" /> Categories
+              </button>
               <button onClick={() => go('/admin')} className={navButtonClass('/admin')}>
                 <PlusCircle className="w-3.5 h-3.5" /> Add New
               </button>
@@ -225,6 +237,9 @@ export default function App() {
               <button onClick={() => go('/inventory')} className={mobileNavButtonClass('/inventory')}>
                 <Settings className="w-4 h-4" /> Manage Inventory
               </button>
+              <button onClick={() => go('/categories')} className={mobileNavButtonClass('/categories')}>
+                <Tags className="w-4 h-4" /> Manage Categories
+              </button>
               <button onClick={() => go('/admin')} className={mobileNavButtonClass('/admin')}>
                 <PlusCircle className="w-4 h-4" /> Add New
               </button>
@@ -255,6 +270,7 @@ export default function App() {
           <Route path="/product/:id" element={<ProductPage />} />
           <Route path="/admin" element={<AdminRoute />} />
           <Route path="/inventory" element={<InventoryRoute />} />
+          <Route path="/categories" element={<CategoriesRoute />} />
           <Route path="/orders" element={<OrdersRoute />} />
           <Route path="/auth" element={<AuthRoute />} />
         </Routes>

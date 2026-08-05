@@ -4,6 +4,7 @@ import { X, Save, Star, Trash2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { STANDARD_SIZES, SA_SIZES, CONDITIONS } from '../lib/constants';
 import { useCategories } from '../lib/useCategories';
 import { deleteStorageFiles } from '../lib/storage';
+import ImageCropModal from './ImageCropModal';
 
 interface ProductImage {
   id: string;
@@ -55,6 +56,7 @@ export default function EditProductModal({
     [...product.product_images].sort((a, b) => a.display_order - b.display_order)
   );
   const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -63,7 +65,8 @@ export default function EditProductModal({
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files) return;
-    setNewFiles((prev) => [...prev, ...Array.from(e.target.files!)].slice(0, 6));
+    const remainingSlots = Math.max(0, 6 - images.length - newFiles.length - cropQueue.length);
+    setCropQueue((prev) => [...prev, ...Array.from(e.target.files!).slice(0, remainingSlots)]);
     e.target.value = '';
   }
 
@@ -80,7 +83,6 @@ export default function EditProductModal({
   async function handleDeleteImage(image: ProductImage) {
     setDeletingImageId(image.id);
     try {
-      // Delete the actual file from Storage first, then the DB row
       await deleteStorageFiles([image.image_url]);
       const { error } = await supabase.from('product_images').delete().eq('id', image.id);
       if (error) throw error;
@@ -151,7 +153,6 @@ export default function EditProductModal({
     if (!window.confirm(`Delete "${product.title}" permanently? This cannot be undone.`)) return;
     setLoading(true);
     try {
-      // Clean up every photo file in Storage before removing the DB rows
       await deleteStorageFiles(images.map((img) => img.image_url));
 
       const { error } = await supabase.from('products').delete().eq('id', product.id);
@@ -348,7 +349,7 @@ export default function EditProductModal({
               <div className="grid grid-cols-3 gap-2 mb-2">
                 {images.map((img) => (
                   <div key={img.id} className="relative group">
-                    <img src={img.image_url} alt="" className="w-full h-20 object-cover rounded-lg border border-gray-200" />
+                    <img src={img.image_url} alt="" className="w-full aspect-square object-cover rounded-lg border border-gray-200" />
                     {img.is_primary && (
                       <span className="absolute bottom-1 left-1 bg-black text-white text-[10px] px-1.5 py-0.5 rounded">
                         Cover
@@ -387,6 +388,7 @@ export default function EditProductModal({
               onChange={handleFileSelect}
               className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-black file:text-white hover:file:bg-gray-800"
             />
+            <p className="text-[11px] text-gray-400 mt-1">Each new photo opens a crop step first.</p>
             {newFiles.length > 0 && (
               <div className="grid grid-cols-3 gap-2 mt-2">
                 {newFiles.map((file, index) => (
@@ -394,7 +396,7 @@ export default function EditProductModal({
                     key={index}
                     src={URL.createObjectURL(file)}
                     alt=""
-                    className="w-full h-20 object-cover rounded-lg border border-dashed border-gray-300"
+                    className="w-full aspect-square object-cover rounded-lg border border-dashed border-gray-300"
                   />
                 ))}
               </div>
@@ -420,6 +422,21 @@ export default function EditProductModal({
           </div>
         </div>
       </div>
+
+      {cropQueue.length > 0 && (
+        <ImageCropModal
+          file={cropQueue[0]}
+          onCancel={() => setCropQueue((prev) => prev.slice(1))}
+          onCropped={(blob) => {
+            const original = cropQueue[0];
+            const croppedFile = new File([blob], original.name.replace(/\.[^.]+$/, '') + '.jpg', {
+              type: 'image/jpeg',
+            });
+            setNewFiles((prev) => [...prev, croppedFile]);
+            setCropQueue((prev) => prev.slice(1));
+          }}
+        />
+      )}
     </div>
   );
 }

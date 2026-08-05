@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Upload, PlusCircle, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { STANDARD_SIZES, SA_SIZES, CONDITIONS } from '../lib/constants';
 import { useCategories } from '../lib/useCategories';
+import ImageCropModal from './ImageCropModal';
 
 export default function AdminUploader({ onProductAdded }: { onProductAdded: () => void }) {
   const { categories, subcategories } = useCategories();
@@ -18,6 +19,7 @@ export default function AdminUploader({ onProductAdded }: { onProductAdded: () =
   const [categoryId, setCategoryId] = useState('');
   const [subcategoryId, setSubcategoryId] = useState('');
   const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
@@ -25,8 +27,9 @@ export default function AdminUploader({ onProductAdded }: { onProductAdded: () =
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files) return;
-    const newFiles = Array.from(e.target.files);
-    setImageFiles((prev) => [...prev, ...newFiles].slice(0, 6));
+    const remainingSlots = Math.max(0, 6 - imageFiles.length - cropQueue.length);
+    const newFiles = Array.from(e.target.files).slice(0, remainingSlots);
+    setCropQueue((prev) => [...prev, ...newFiles]);
     e.target.value = '';
   }
 
@@ -106,7 +109,7 @@ export default function AdminUploader({ onProductAdded }: { onProductAdded: () =
   }
 
   return (
-    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-xs max-w-xl mx-auto my-8">
+    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm max-w-xl mx-auto my-8">
       <div className="flex items-center gap-2 mb-4 border-b pb-3">
         <PlusCircle className="w-5 h-5 text-black" />
         <h3 className="font-bold text-base">Add New Drop (Admin Panel)</h3>
@@ -286,6 +289,7 @@ export default function AdminUploader({ onProductAdded }: { onProductAdded: () =
             onChange={handleFileSelect}
             className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-black file:text-white hover:file:bg-gray-800"
           />
+          <p className="text-[11px] text-gray-400 mt-1">Each photo opens a crop step so you can see exactly how it'll look before it's added.</p>
 
           {imageFiles.length > 0 && (
             <div className="grid grid-cols-3 gap-2 mt-3">
@@ -294,7 +298,7 @@ export default function AdminUploader({ onProductAdded }: { onProductAdded: () =
                   <img
                     src={URL.createObjectURL(file)}
                     alt={`preview-${index}`}
-                    className="w-full h-20 object-cover rounded-lg border border-gray-200"
+                    className="w-full aspect-square object-cover rounded-lg border border-gray-200"
                   />
                   {index === 0 && (
                     <span className="absolute bottom-1 left-1 bg-black text-white text-[10px] px-1.5 py-0.5 rounded">
@@ -320,9 +324,24 @@ export default function AdminUploader({ onProductAdded }: { onProductAdded: () =
           className="w-full bg-black text-white py-2.5 rounded-lg font-medium text-sm hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <Upload className="w-4 h-4" />
-          {loading ? 'Publishing Drop...' : 'Publish to SnowyFits Catalog'}
+          {loading ? 'Publishing Drop...' : 'Publish to Snowy\'s Thrift Store'}
         </button>
       </form>
+
+      {cropQueue.length > 0 && (
+        <ImageCropModal
+          file={cropQueue[0]}
+          onCancel={() => setCropQueue((prev) => prev.slice(1))}
+          onCropped={(blob) => {
+            const original = cropQueue[0];
+            const croppedFile = new File([blob], original.name.replace(/\.[^.]+$/, '') + '.jpg', {
+              type: 'image/jpeg',
+            });
+            setImageFiles((prev) => [...prev, croppedFile].slice(0, 6));
+            setCropQueue((prev) => prev.slice(1));
+          }}
+        />
+      )}
     </div>
   );
 }
