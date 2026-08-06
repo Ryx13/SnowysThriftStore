@@ -129,4 +129,4 @@ that doesn't handle SPA fallback automatically, routes need to fall back to
 
 ## Author
 
-Ryan Dube — [github.com/Ryx13](https://github.com/Ryx13)
+Ryan Dube — [ryxvoid.xyz](https://ryxvoid.xyz) · [linkedin.com/in/ryxvoid](https://linkedin.com/in/ryxvoid)
